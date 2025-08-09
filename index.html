@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AS 3610 Slab Formwork Checker</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0ea5e9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    body { margin: 0; background: #f8fafc; color: #0f172a; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 1.5rem; margin: 12px 0; }
+    .grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+    @media (min-width: 900px) { .grid { grid-template-columns: repeat(3, 1fr); } }
+    .card { background: white; border-radius: 12px; box-shadow: 0 6px 20px rgba(2, 6, 23, 0.06); padding: 16px; }
+    .label { font-size: 0.9rem; margin-bottom: 4px; display: block; color: #334155; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 1rem; outline: none; }
+    .row { margin-bottom: 10px; }
+    .muted { color: #475569; font-size: 0.9rem; }
+    .ok { color: #047857; }
+    .warn { color: #b91c1c; }
+    .btns { display: flex; gap: 8px; }
+    button { padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f1f5f9; cursor: pointer; }
+    .results { display: grid; gap: 12px; grid-template-columns: 1fr; }
+    @media (min-width: 900px) { .results { grid-template-columns: repeat(3, 1fr); } }
+    .badge { padding: 6px 10px; border-radius: 999px; color: white; font-weight: 600; font-size: 0.9rem; display: inline-block; }
+    .pass { background: #16a34a; }
+    .fail { background: #dc2626; }
+    .footer { font-size: 12px; color: #64748b; margin-top: 12px; }
+    .install-tip { background:#e0f2fe; border:1px solid #bae6fd; color:#075985; padding:10px 12px; border-radius:10px; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>AS 3610 Slab Formwork Checker (PWA)</h1>
+    <div class="card">
+      <p class="muted">Install on iPhone: Share → <b>Add to Home Screen</b>. Works offline after the first load.</p>
+      <div class="install-tip">If you're seeing this from the Files app (local HTML), hosting over HTTPS is required to install as an app. Upload this folder to GitHub Pages or Netlify, open the URL in Safari, then use Add to Home Screen.</div>
+    </div>
+
+    <div class="grid" id="inputs">
+      <div class="card">
+        <h3>Loads</h3>
+        <div class="row">
+          <label class="label">Slab thickness (mm)</label>
+          <input id="slabThk_mm" type="number" value="200" />
+        </div>
+        <div class="row">
+          <label class="label">Concrete unit weight γ (kN/m³)</label>
+          <input id="gammaConc_kNm3" type="number" step="0.1" value="24" />
+        </div>
+        <div class="row">
+          <label class="label">Additional dead load (kPa)</label>
+          <input id="addDead_kPa" type="number" step="0.1" value="0.5" />
+        </div>
+        <div class="row">
+          <label class="label">Construction live load (kPa)</label>
+          <input id="live_kPa" type="number" step="0.1" value="0.75" />
+        </div>
+        <div class="row">
+          <label class="label">Combination</label>
+          <select id="comb">
+            <option value="ULS" selected>ULS (1.2G + 1.5Q)</option>
+            <option value="Service">Service (G + Q)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Support Layout</h3>
+        <div class="row">
+          <label class="label">Spacing in X (mm)</label>
+          <input id="spacingX_mm" type="number" value="1200" />
+        </div>
+        <div class="row">
+          <label class="label">Spacing in Y (mm)</label>
+          <input id="spacingY_mm" type="number" value="1200" />
+        </div>
+        <div class="row">
+          <label class="label">Max spacing limit (mm)</label>
+          <input id="maxSpacing_mm" type="number" value="1500" />
+        </div>
+        <p id="spacingMsg" class="muted"></p>
+      </div>
+
+      <div class="card">
+        <h3>Capacity</h3>
+        <div class="row">
+          <label class="label">Frame/prop capacity (kN)</label>
+          <input id="capacity_kN" type="number" step="0.1" value="24" />
+        </div>
+        <div class="row">
+          <label class="label">Capacity reduction factor φ<sub>R</sub></label>
+          <input id="phiR" type="number" step="0.05" value="0.9" />
+        </div>
+        <div class="btns">
+          <button id="resetBtn">Reset</button>
+          <button id="calcBtn">Calculate</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="resultsCard" style="margin-top:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h3>Results</h3>
+        <div id="statusBadge" class="badge">--</div>
+      </div>
+      <div class="results">
+        <div>
+          <h4>Pressures</h4>
+          <div>G (dead): <b id="G_kPa">--</b> kPa</div>
+          <div>Q (live): <b id="Q_kPa">--</b> kPa</div>
+          <div>Service (G+Q): <b id="p_service_kPa">--</b> kPa</div>
+          <div>ULS (1.2G+1.5Q): <b id="p_design_kPa">--</b> kPa</div>
+          <div>Governing (selected): <b id="governing_kPa">--</b> kPa</div>
+        </div>
+        <div>
+          <h4>Layout</h4>
+          <div>Tributary area per support: <b id="trib_m2">--</b> m²</div>
+          <div>Action on one support: <b id="action_kN">--</b> kN</div>
+        </div>
+        <div>
+          <h4>Capacity Check</h4>
+          <div>Design resistance φR·R: <b id="R_kN">--</b> kN</div>
+          <div>Utilisation: <b id="util_pct">--</b></div>
+          <div>Status: <b id="statusText">--</b></div>
+        </div>
+      </div>
+      <div class="footer">
+        Notes: γ·t used for wet concrete; defaults per common practice. Confirm combos, capacities (incl. prop height reductions), and spacing limits with AS 3610 / AS/NZS 1170 and supplier data. Engineer of record to verify.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+      });
+    }
+    function val(id){ return parseFloat(document.getElementById(id).value); }
+    function setText(id, v){ document.getElementById(id).textContent = v; }
+
+    function calc(){
+      const slabThk_mm = val('slabThk_mm');
+      const gamma = val('gammaConc_kNm3');
+      const addDead = val('addDead_kPa');
+      const live = val('live_kPa');
+      const comb = document.getElementById('comb').value;
+      const spacingX_mm = val('spacingX_mm');
+      const spacingY_mm = val('spacingY_mm');
+      const maxSpacing_mm = val('maxSpacing_mm');
+      const cap = val('capacity_kN');
+      const phiR = val('phiR');
+
+      const thk_m = slabThk_mm/1000.0;
+      const gConc_kPa = thk_m * gamma;
+      const G_kPa = gConc_kPa + addDead;
+      const Q_kPa = live;
+      const p_service = G_kPa + Q_kPa;
+      const p_design = 1.2*G_kPa + 1.5*Q_kPa;
+      const governing = (comb === 'ULS') ? p_design : p_service;
+
+      const sX_m = spacingX_mm/1000.0;
+      const sY_m = spacingY_mm/1000.0;
+      const trib = sX_m * sY_m;
+      const action_kN = governing * trib;
+
+      const R_design = phiR * cap;
+      const util = action_kN / R_design;
+      const spacingOK = (spacingX_mm <= maxSpacing_mm) && (spacingY_mm <= maxSpacing_mm);
+      const pass = (util <= 1.0) && spacingOK;
+
+      setText('G_kPa', G_kPa.toFixed(2));
+      setText('Q_kPa', Q_kPa.toFixed(2));
+      setText('p_service_kPa', p_service.toFixed(2));
+      setText('p_design_kPa', p_design.toFixed(2));
+      setText('governing_kPa', governing.toFixed(2));
+      setText('trib_m2', trib.toFixed(3));
+      setText('action_kN', action_kN.toFixed(2));
+      setText('R_kN', R_design.toFixed(2));
+      setText('util_pct', (util*100).toFixed(1) + '%');
+      setText('statusText', pass ? 'PASS' : 'FAIL');
+
+      const spacingMsg = document.getElementById('spacingMsg');
+      spacingMsg.textContent = spacingOK ? 'Spacing check: OK' : 'Spacing check: Exceeds limit';
+      spacingMsg.className = spacingOK ? 'ok' : 'warn';
+
+      const badge = document.getElementById('statusBadge');
+      badge.textContent = pass ? 'PASS' : 'FAIL';
+      badge.className = 'badge ' + (pass ? 'pass' : 'fail');
+    }
+
+    document.getElementById('calcBtn').addEventListener('click', calc);
+    document.getElementById('resetBtn').addEventListener('click', ()=>{
+      document.getElementById('slabThk_mm').value = 200;
+      document.getElementById('gammaConc_kNm3').value = 24;
+      document.getElementById('addDead_kPa').value = 0.5;
+      document.getElementById('live_kPa').value = 0.75;
+      document.getElementById('spacingX_mm').value = 1200;
+      document.getElementById('spacingY_mm').value = 1200;
+      document.getElementById('maxSpacing_mm').value = 1500;
+      document.getElementById('capacity_kN').value = 24;
+      document.getElementById('phiR').value = 0.9;
+      document.getElementById('comb').value = 'ULS';
+      calc();
+    });
+
+    calc();
+  </script>
+</body>
+</html>
